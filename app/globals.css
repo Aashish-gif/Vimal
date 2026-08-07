@@ -1,26 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+/* ─── Design Tokens ───────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Backgrounds */
+  --background: #f8fafc;
+  --surface:    #ffffff;
+  --surface-muted: #f1f5f9;
+
+  /* Foreground / text */
+  --foreground: #0f172a;
+  --muted-fg:   #64748b;
+  --subtle-fg:  #94a3b8;
+
+  /* Brand / accent  */
+  --brand:         #1e40af;
+  --brand-light:   #dbeafe;
+  --brand-fg:      #ffffff;
+
+  /* Semantic colours */
+  --success:     #16a34a;
+  --success-bg:  #f0fdf4;
+  --success-border: #bbf7d0;
+
+  --warning:     #d97706;
+  --warning-bg:  #fffbeb;
+  --warning-border: #fde68a;
+
+  --danger:      #dc2626;
+  --danger-bg:   #fef2f2;
+  --danger-border: #fecaca;
+
+  --info:        #0284c7;
+  --info-bg:     #f0f9ff;
+  --info-border: #bae6fd;
+
+  /* Borders */
+  --border:       #e2e8f0;
+  --border-strong:#cbd5e1;
+
+  /* Shadows */
+  --shadow-sm:  0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:  0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,.10), 0 4px 8px rgba(0,0,0,.04);
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Fira Code', monospace;
+
+  /* Radius */
+  --radius-sm:  0.375rem;
+  --radius:     0.625rem;
+  --radius-lg:  0.875rem;
+  --radius-xl:  1.25rem;
+  --radius-2xl: 1.5rem;
 }
 
+/* ─── Tailwind theme bridge ───────────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background:   var(--background);
+  --color-foreground:   var(--foreground);
+  --color-card:         var(--surface);
+  --color-border:       var(--border);
+  --color-muted:        var(--muted-fg);
+  --color-accent:       var(--brand);
+  --font-sans:          var(--font-sans);
+  --font-mono:          var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Base reset ───────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  border-color: var(--border);
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;   /* 15px */
+  line-height: 1.6;
+  min-height: 100dvh;
 }
+
+/* ─── Scrollbar (webkit) ──────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--subtle-fg); }
+
+/* ─── Focus ring ──────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ─── Utility: hide scrollbar but keep functionality ─── */
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ─── Animations ──────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.animate-fade-in  { animation: fade-in  0.25s ease both; }
+.animate-slide-up { animation: slide-up 0.3s ease both; }

@@ -1,0 +1,174 @@
+import { getFrameById, type Frame, frames } from "./frames";
+import type { Customer } from "./customers";
+import { isSupabaseConfigured, supabase } from "../supabaseClient";
+import { broadcastChange } from "../realtimeSync";
+
+export type ReservationStatus = "active" | "cancelled" | "collected";
+
+export interface Reservation {
+  id: string;
+  customerId: string;
+  frameId: string;
+  status: ReservationStatus;
+  createdAt: string;
+}
+
+// Global scope initialization to prevent hot-reload memory split
+if (!(global as any).reservationsStore) {
+  (global as any).reservationsStore = [];
+}
+
+const getStore = (): Reservation[] => (global as any).reservationsStore;
+const setStore = (val: Reservation[]) => {
+  (global as any).reservationsStore = val;
+};
+
+function generateReservationId(): string {
+  return "r-" + Math.random().toString(36).slice(2, 9);
+}
+
+function setStock(frameId: string, delta: number): Frame | null {
+  const frame = frames.find((f) => f.id === frameId);
+  if (!frame) return null;
+  const next = frame.stock + delta;
+  if (next < 0) return null;
+  frame.stock = next;
+
+  // Broadcast frame update
+  broadcastChange({
+    table: "frames",
+    eventType: "UPDATE",
+    newRow: frame,
+  });
+
+  // Sync frame stock change to Supabase in background
+  if (isSupabaseConfigured && supabase) {
+    supabase
+      .from("ifpos_frames")
+      .update({ stock: next })
+      .eq("id", frameId)
+      .then();
+  }
+
+  return frame;
+}
+
+export function createReservation(
+  input: CreateReservationInput
+): Reservation | null {
+  const frame = getFrameById(input.frameId);
+  if (!frame) return null;
+  if (frame.stock <= 0) return null;
+
+  const updated = setStock(input.frameId, -1);
+  if (!updated) return null;
+
+  const reservation: Reservation = {
+    id: generateReservationId(),
+    customerId: input.customer.id,
+    frameId: input.frameId,
+    status: "active",
+    createdAt: new Date().toISOString(),
+  };
+
+  setStore([reservation, ...getStore()]);
+
+  // Sync to other tabs
+  broadcastChange({
+    table: "reservations",
+    eventType: "INSERT",
+    newRow: reservation,
+  });
+
+  // Sync to Supabase in background
+  if (isSupabaseConfigured && supabase) {
+    supabase
+      .from("ifpos_reservations")
+      .insert({
+        id: reservation.id,
+        customer_id: reservation.customerId,
+        frame_id: reservation.frameId,
+        status: reservation.status,
+        created_at: reservation.createdAt,
+      })
+      .then();
+  }
+
+  return reservation;
+}
+
+export function getReservations(): Reservation[] {
+  return [...getStore()];
+}
+
+export function getReservationById(id: string): Reservation | undefined {
+  return getStore().find((r) => r.id === id);
+}
+
+export function getReservationsByCustomer(customerId: string): Reservation[] {
+  return getStore().filter((r) => r.customerId === customerId);
+}
+
+export function updateReservationStatus(
+  id: string,
+  status: ReservationStatus
+): Reservation | null {
+  const reservation = getStore().find((r) => r.id === id);
+  if (!reservation) return null;
+
+  const oldStatus = reservation.status;
+  if (oldStatus === "active" && status !== "active") {
+    setStock(reservation.frameId, 1);
+  } else if (oldStatus !== "active" && status === "active") {
+    const frame = getFrameById(reservation.frameId);
+    if (!frame || frame.stock <= 0) return null;
+    setStock(reservation.frameId, -1);
+  }
+
+  reservation.status = status;
+  setStore([...getStore()]);
+
+  // Sync to other tabs
+  broadcastChange({
+    table: "reservations",
+    eventType: "UPDATE",
+    newRow: reservation,
+  });
+
+  // Sync to Supabase in background
+  if (isSupabaseConfigured && supabase) {
+    supabase
+      .from("ifpos_reservations")
+      .update({ status })
+      .eq("id", id)
+      .then();
+  }
+
+  return reservation;
+}
+
+export interface CreateReservationInput {
+  customer: Customer;
+  frameId: string;
+}
+
+export function seedDemoReservations(): void {}
+
+// Fetch initial data from Supabase once on startup if online
+if (isSupabaseConfigured && supabase) {
+  supabase
+    .from("ifpos_reservations")
+    .select("*")
+    .then(({ data }) => {
+      if (data) {
+        const mapped = data.map((d) => ({
+          id: d.id,
+          customerId: d.customer_id,
+          frameId: d.frame_id,
+          status: d.status,
+          createdAt: d.created_at,
+        }));
+        setStore(mapped);
+      }
+    });
+}
