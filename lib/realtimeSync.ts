@@ -72,7 +72,7 @@ export function subscribeToTable(
 
   return () => {
     listeners.delete(listener);
-    if (supabaseChannel) {
+    if (supabaseChannel && supabase !== null) {
       supabase.removeChannel(supabaseChannel);
     }
   };
