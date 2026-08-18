@@ -22,11 +22,16 @@ function initials(name: string) {
   return name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 }
 
-const RES_STATUS_VARIANT: Record<ReservationStatus, "success"|"warning"|"secondary"> = {
-  active: "success", cancelled: "warning", collected: "secondary",
+const RES_STATUS_VARIANT: Record<ReservationStatus, "success" | "warning" | "secondary" | "info"> = {
+  pending: "success",
+  converted: "info",
+  cancelled: "warning",
 };
-const ORDER_STATUS_VARIANT: Record<OrderStatus, "warning"|"info"|"success"|"secondary"> = {
-  pending: "warning", processing: "info", arrived: "success", collected: "secondary",
+const ORDER_STATUS_VARIANT: Record<OrderStatus, "warning" | "info" | "success" | "secondary"> = {
+  pending: "warning",
+  processing: "info",
+  ready_for_pickup: "success",
+  collected: "secondary",
 };
 
 export default function StaffCustomersPage() {
@@ -158,7 +163,7 @@ export default function StaffCustomersPage() {
                               <p className="truncate text-xs text-slate-400">{o.frame ? `${o.frame.brand} ${o.frame.model}` : "Unknown"}</p>
                             </div>
                             <Badge variant={ORDER_STATUS_VARIANT[o.status]} className="text-[10px] shrink-0">
-                              {o.status === "arrived" ? "Ready!" : o.status.charAt(0).toUpperCase() + o.status.slice(1)}
+                              {o.status === "ready_for_pickup" ? "Ready!" : o.status.charAt(0).toUpperCase() + o.status.slice(1)}
                             </Badge>
                           </div>
                         ))}
