@@ -29,10 +29,10 @@ const ORDER_TYPE_LABEL: Record<OrderType, string> = {
   "custom-lens": "Custom Lens", "ready-pickup": "Ready Pickup", repair: "Repair",
 };
 const STATUS_VARIANT: Record<OrderStatus, "default"|"success"|"warning"|"secondary"|"info"> = {
-  pending: "warning", processing: "info", arrived: "success", collected: "secondary",
+  pending: "warning", processing: "info", ready_for_pickup: "success", collected: "secondary"
 };
 const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: "Pending", processing: "Processing", arrived: "Arrived ✓", collected: "Collected",
+  pending: "Pending", processing: "Processing", ready_for_pickup: "Ready for Pickup", collected: "Collected",
 };
 
 import { subscribeToTable } from "@/lib/realtimeSync";
@@ -44,31 +44,36 @@ export default function StaffOrdersPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToTable("orders", () => {
-      refresh();
-    });
+    const unsubOrders = subscribeToTable("orders", refresh);
+    const unsubFrames = subscribeToTable("frames", refresh);
+    const unsubCustomers = subscribeToTable("customers", refresh);
     return () => {
-      unsubscribe();
+      unsubOrders();
+      unsubFrames();
+      unsubCustomers();
     };
   }, []);
 
   const rows = useMemo<OrderRow[]>(() => {
     return getOrders()
+      // Only show confirmed orders (processing → ready_for_pickup → collected)
+      .filter((o) => o.status !== "pending")
       .map((o) => ({ ...o, customer: getCustomerById(o.customerId), frame: getFrameById(o.frameId) }))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [revision]);
 
-  const pendingCount = rows.filter((r) => r.status === "pending" || r.status === "processing").length;
-  const arrivedCount = rows.filter((r) => r.status === "arrived").length;
+  const processingCount = rows.filter((r) => r.status === "processing").length;
+  const arrivedCount = rows.filter((r) => r.status === "ready_for_pickup").length;
 
   const onMarkArrived = (id: string) => {
-    const res = updateOrderStatus(id, "arrived");
+    const res = updateOrderStatus(id, "ready_for_pickup");
     if (res && res.newlyArrived) {
-      const customer = getCustomerById(res.order.customerId) ?? findOrCreateCustomer(RAHUL_INPUT);
-      const msg = buildOrderArrivedMessage(customer.name, res.order.id);
-      pushInboxMessage({ customerId: customer.id, kind: "order-arrived", text: msg, orderId: res.order.id });
+      const customer = getCustomerById(res.order.customerId);
+      const customerName = customer?.name ?? "Customer";
+      const msg = buildOrderArrivedMessage(customerName, res.order.id);
+      pushInboxMessage({ customerId: res.order.customerId, kind: "order-arrived", text: msg, orderId: res.order.id });
       setArrivedIds((prev) => new Set(prev).add(id));
-      setToast(`🔔 Pickup notification sent to ${customer.name} · ${res.order.id}`);
+      setToast(`🔔 Ready for Pickup! Notification sent to ${customerName} · ${res.order.id}`);
       setTimeout(() => setToast(null), 4000);
     }
     refresh();
@@ -99,13 +104,13 @@ export default function StaffOrdersPage() {
               <ShoppingBag className="h-5 w-5 text-slate-400" />
               <div>
                 <CardTitle>Frame Orders</CardTitle>
-                <CardDescription>Mark as Arrived to send pickup notification</CardDescription>
+                <CardDescription>Processing orders – mark as arrived to notify customer</CardDescription>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{rows.length} total</Badge>
-              <Badge variant="info">{pendingCount} in progress</Badge>
-              <Badge variant="success">{arrivedCount} arrived</Badge>
+                <Badge variant="secondary">{rows.length} total</Badge>
+                <Badge variant="info">{processingCount} processing</Badge>
+                <Badge variant="success">{arrivedCount} arrived</Badge>
             </div>
           </div>
         </CardHeader>
@@ -173,9 +178,9 @@ export default function StaffOrdersPage() {
                           <td className="whitespace-nowrap px-5 py-4">
                             <div className="flex flex-col gap-1">
                               <Badge variant={STATUS_VARIANT[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-                              {r.status === "arrived" && r.arrivedAt && (
-                                <span className="text-[10px] text-slate-400">{formatDate(r.arrivedAt)}</span>
-                              )}
+                               {r.status === "ready_for_pickup" && r.arrivedAt && (
+                                 <span className="text-[10px] text-slate-400">{formatDate(r.arrivedAt)}</span>
+                               )}
                             </div>
                           </td>
                           <td className="whitespace-nowrap px-5 py-4">
@@ -186,32 +191,29 @@ export default function StaffOrdersPage() {
                           </td>
                           <td className="whitespace-nowrap px-5 py-4">
                             <div className="flex justify-end gap-2">
-                              {r.status === "pending" && (
-                                <button onClick={() => onStatusChange(r.id, "processing")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">Start Processing</button>
-                              )}
-                              {r.status === "processing" && (
-                                <button onClick={() => onMarkArrived(r.id)} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm">
-                                  <Bell className="h-4 w-4" />
-                                  Mark as Arrived
-                                </button>
-                              )}
-                              {r.status === "arrived" && (
-                                <div className="flex items-center gap-2">
-                                  {justArrived && (
-                                    <div className="flex items-center gap-1 text-emerald-700">
-                                      <CheckCircle2 className="h-4 w-4" />
-                                      <span className="text-xs font-semibold">Notified</span>
-                                    </div>
-                                  )}
-                                  <button onClick={() => onStatusChange(r.id, "collected")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">Mark Collected</button>
-                                </div>
-                              )}
-                              {r.status === "collected" && (
-                                <div className="flex items-center gap-1 text-slate-400">
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  <span className="text-xs font-medium">Complete</span>
-                                </div>
-                              )}
+                                {r.status === "processing" && (
+                                  <button onClick={() => onMarkArrived(r.id)} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm">
+                                    <Bell className="h-4 w-4" />
+                                    Mark as Arrived
+                                  </button>
+                                )}
+                                {r.status === "ready_for_pickup" && (
+                                  <div className="flex items-center gap-2">
+                                    {justArrived && (
+                                      <div className="flex items-center gap-1 text-emerald-700">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        <span className="text-xs font-semibold">Notified</span>
+                                      </div>
+                                    )}
+                                    <button onClick={() => onStatusChange(r.id, "collected")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">Mark Collected</button>
+                                  </div>
+                                )}
+                               {r.status === "collected" && (
+                                 <div className="flex items-center gap-1 text-slate-400">
+                                   <CheckCircle2 className="h-4 w-4" />
+                                   <span className="text-xs font-medium">Complete</span>
+                                 </div>
+                               )}
                             </div>
                           </td>
                         </tr>

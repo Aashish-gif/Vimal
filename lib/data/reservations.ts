@@ -3,7 +3,10 @@ import type { Customer } from "./customers";
 import { isSupabaseConfigured, supabase } from "../supabaseClient";
 import { broadcastChange } from "../realtimeSync";
 
-export type ReservationStatus = "active" | "cancelled" | "collected";
+// "pending"   = reservation is active, awaiting staff action
+// "converted" = staff converted it to an Order
+// "cancelled" = staff cancelled the reservation
+export type ReservationStatus = "pending" | "converted" | "cancelled";
 
 export interface Reservation {
   id: string;
@@ -11,6 +14,19 @@ export interface Reservation {
   frameId: string;
   status: ReservationStatus;
   createdAt: string;
+}
+
+// Map reservation ID to created order ID after conversion
+const conversionMap = new Map<string, string>();
+
+/** Retrieve the order ID that a reservation was converted to, if any */
+export function getConvertedOrderId(reservationId: string): string | undefined {
+  return conversionMap.get(reservationId);
+}
+
+/** Record the conversion of a reservation to an order */
+export function setConvertedOrderId(reservationId: string, orderId: string): void {
+  conversionMap.set(reservationId, orderId);
 }
 
 // Global scope initialization to prevent hot-reload memory split
@@ -67,7 +83,7 @@ export function createReservation(
     id: generateReservationId(),
     customerId: input.customer.id,
     frameId: input.frameId,
-    status: "active",
+    status: "pending",
     createdAt: new Date().toISOString(),
   };
 
@@ -117,12 +133,9 @@ export function updateReservationStatus(
   if (!reservation) return null;
 
   const oldStatus = reservation.status;
-  if (oldStatus === "active" && status !== "active") {
+  // Return stock when a pending reservation is cancelled or converted to an order
+  if (oldStatus === "pending" && status !== "pending") {
     setStock(reservation.frameId, 1);
-  } else if (oldStatus !== "active" && status === "active") {
-    const frame = getFrameById(reservation.frameId);
-    if (!frame || frame.stock <= 0) return null;
-    setStock(reservation.frameId, -1);
   }
 
   reservation.status = status;
@@ -165,7 +178,10 @@ if (isSupabaseConfigured && supabase) {
           id: d.id,
           customerId: d.customer_id,
           frameId: d.frame_id,
-          status: d.status,
+          // Normalise legacy Supabase values
+          status: (d.status === "active" ? "pending"
+                 : d.status === "collected" ? "converted"
+                 : d.status) as ReservationStatus,
           createdAt: d.created_at,
         }));
         setStore(mapped);

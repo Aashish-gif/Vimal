@@ -48,9 +48,9 @@ export default function StaffOverviewPage() {
     return [
       { label: "Total Frames",        value: frames.length,                                                        icon: Package,       href: "/staff/inventory",    color: "bg-blue-50",   text: "text-blue-600",   sub: `${frames.filter(f => f.stock > 0).length} with stock` },
       { label: "Available Frames",     value: frames.filter(f => f.stock > 0).length,                              icon: CheckCircle,   href: "/staff/inventory",    color: "bg-emerald-50",text: "text-emerald-600",sub: `${frames.filter(f => f.stock === 0).length} out of stock` },
-      { label: "Active Reservations",  value: reservations.filter(r => r.status === "active").length,              icon: BookmarkCheck, href: "/staff/reservations", color: "bg-violet-50", text: "text-violet-600", sub: "Frames on hold" },
+      { label: "Pending Reservations", value: reservations.filter(r => r.status === "pending").length,              icon: BookmarkCheck, href: "/staff/reservations", color: "bg-violet-50", text: "text-violet-600", sub: "Frames on hold" },
       { label: "Pending Orders",       value: orders.filter(o => o.status === "pending" || o.status === "processing").length, icon: ShoppingBag,   href: "/staff/orders",       color: "bg-amber-50",  text: "text-amber-600",  sub: "Awaiting arrival" },
-      { label: "Ready for Pickup",     value: orders.filter(o => o.status === "arrived").length,                   icon: Bell,          href: "/staff/orders",       color: "bg-rose-50",   text: "text-rose-600",   sub: "Customers notified" },
+      { label: "Ready for Pickup",     value: orders.filter(o => o.status === "ready_for_pickup").length,           icon: Bell,          href: "/staff/orders",       color: "bg-rose-50",   text: "text-rose-600",   sub: "Customers notified" },
     ];
   }, [revision]);
 
@@ -61,11 +61,11 @@ export default function StaffOverviewPage() {
     for (const r of reservations.slice(0, 5)) {
       const customer = getCustomerById(r.customerId);
       const frame = getFrameById(r.frameId);
-      events.push({ id: "r-" + r.id, label: customer?.name ?? "Customer", sub: frame ? `${frame.brand} ${frame.model}` : "Frame", time: r.createdAt, variant: r.status === "active" ? "success" : r.status === "cancelled" ? "warning" : "secondary", status: r.status === "active" ? "Reserved" : r.status === "cancelled" ? "Cancelled" : "Collected" });
+      events.push({ id: "r-" + r.id, label: customer?.name ?? "Customer", sub: frame ? `${frame.brand} ${frame.model}` : "Frame", time: r.createdAt, variant: r.status === "pending" ? "success" : r.status === "cancelled" ? "warning" : "secondary", status: r.status === "pending" ? "Pending" : r.status === "cancelled" ? "Cancelled" : "Converted" });
     }
     for (const o of orders.slice(0, 5)) {
       const customer = getCustomerById(o.customerId);
-      events.push({ id: "o-" + o.id, label: customer?.name ?? "Customer", sub: `Order ${o.id}`, time: o.arrivedAt ?? o.createdAt, variant: o.status === "arrived" ? "success" : o.status === "pending" ? "warning" : "info", status: o.status === "arrived" ? "Arrived" : o.status === "pending" ? "Pending" : o.status === "processing" ? "Processing" : "Collected" });
+      events.push({ id: "o-" + o.id, label: customer?.name ?? "Customer", sub: `Order ${o.id}`, time: o.arrivedAt ?? o.createdAt, variant: o.status === "ready_for_pickup" ? "success" : o.status === "pending" ? "warning" : "info", status: o.status === "ready_for_pickup" ? "Ready for Pickup" : o.status === "pending" ? "Pending" : o.status === "processing" ? "Processing" : "Collected" });
     }
     return events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
   }, [revision]);
@@ -151,7 +151,7 @@ export default function StaffOverviewPage() {
                 { step: 1, text: "Customer browses / asks AI for aviators under ₹1500", href: "/customer/browse" },
                 { step: 2, text: "Customer reserves the Black Aviator", href: "/customer/assistant" },
                 { step: 3, text: "Reservation appears here", href: "/staff/reservations" },
-                { step: 4, text: "Staff marks VO-104 as Arrived", href: "/staff/orders" },
+                { step: 4, text: "Staff marks order as Arrived", href: "/staff/orders" },
                 { step: 5, text: "Customer sees Ready for Pickup", href: "/customer/orders" },
                 { step: 6, text: "Pickup notification in AI chat", href: "/customer/assistant" },
               ].map((s) => (

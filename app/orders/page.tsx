@@ -73,14 +73,14 @@ const STATUS_VARIANT: Record<
 > = {
   pending: "warning",
   processing: "info",
-  arrived: "success",
+  ready_for_pickup: "success",
   collected: "secondary",
 };
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   pending: "Pending",
   processing: "Processing",
-  arrived: "Arrived ✓",
+  ready_for_pickup: "Ready for Pickup",
   collected: "Collected",
 };
 
@@ -112,10 +112,10 @@ export default function OrdersPage() {
   const pendingCount = rows.filter(
     (r) => r.status === "pending" || r.status === "processing"
   ).length;
-  const arrivedCount = rows.filter((r) => r.status === "arrived").length;
+  const arrivedCount = rows.filter((r) => r.status === "ready_for_pickup").length;
 
   const onMarkArrived = (id: string) => {
-    const res = updateOrderStatus(id, "arrived");
+    const res = updateOrderStatus(id, "ready_for_pickup");
     if (res && res.newlyArrived) {
       const customer =
         getCustomerById(res.order.customerId) ??
@@ -129,7 +129,7 @@ export default function OrdersPage() {
       });
       setArrivedIds((prev) => new Set(prev).add(id));
       setToast(
-        `🔔 Pickup notification sent to ${customer.name} · Order ${res.order.id}`
+        `🔔 Ready for Pickup! Notification sent to ${customer.name} · Order ${res.order.id}`
       );
       setTimeout(() => setToast(null), 4000);
     }
@@ -281,7 +281,7 @@ export default function OrdersPage() {
                               <Badge variant={STATUS_VARIANT[r.status]}>
                                 {STATUS_LABEL[r.status]}
                               </Badge>
-                              {r.status === "arrived" && r.arrivedAt && (
+                              {r.status === "ready_for_pickup" && r.arrivedAt && (
                                 <span className="text-[10px] text-slate-400">
                                   {formatDate(r.arrivedAt)}
                                 </span>
@@ -322,7 +322,7 @@ export default function OrdersPage() {
                                 </Button>
                               )}
 
-                              {r.status === "arrived" && (
+                              {r.status === "ready_for_pickup" && (
                                 <div className="flex items-center gap-2">
                                   {justArrived && (
                                     <div className="flex items-center gap-1 text-emerald-700">

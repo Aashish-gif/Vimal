@@ -202,7 +202,7 @@ export default function StaffInventoryPage() {
   }, []);
 
   const activeReserved = useMemo(() => {
-    const res = getReservations().filter((r) => r.status === "active");
+    const res = getReservations().filter((r) => r.status === "pending");
     return new Set([...res.map((r) => r.frameId), ...reservedIds]);
   }, [reservedIds, reservationsVersion]);
 

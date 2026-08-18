@@ -13,14 +13,14 @@ import { findOrCreateCustomer } from "@/lib/data/customers";
 const DEMO_CUSTOMER = { name: "Rahul Sharma", phone: "+91 98765 43210" };
 
 const STATUS_LABEL: Record<ReservationStatus, string> = {
-  active: "Active",
+  pending: "Pending",
+  converted: "Converted to Order",
   cancelled: "Cancelled",
-  collected: "Collected",
 };
-const STATUS_VARIANT: Record<ReservationStatus, "success" | "warning" | "secondary"> = {
-  active: "success",
+const STATUS_VARIANT: Record<ReservationStatus, "success" | "warning" | "secondary" | "info"> = {
+  pending: "success",
+  converted: "info",
   cancelled: "warning",
-  collected: "secondary",
 };
 
 function formatPrice(p: number) {
@@ -113,9 +113,14 @@ export default function CustomerReservationsPage() {
                     {formatDate(r.createdAt)}
                   </div>
                 </div>
-                {r.status === "active" && (
+                {r.status === "pending" && (
                   <p className="mt-1 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
                     📍 Frame held for 24 hours at Vimal Opticals
+                  </p>
+                )}
+                {r.status === "converted" && (
+                  <p className="mt-1 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                    ✅ Your reservation has been converted to an order by staff.
                   </p>
                 )}
               </div>

@@ -18,11 +18,14 @@ import { cn } from "@/lib/utils";
 import {
   getReservations,
   updateReservationStatus,
+  getConvertedOrderId,
+  setConvertedOrderId,
   type Reservation,
   type ReservationStatus,
 } from "@/lib/data/reservations";
+import { createOrder } from "@/lib/data/orders";
 import { getFrameById, type Frame } from "@/lib/data/frames";
-import { getCustomerById, type Customer } from "@/lib/data/customers";
+import { getCustomerById, findOrCreateCustomer, type Customer } from "@/lib/data/customers";
 
 interface ReservationRow extends Reservation {
   customer?: Customer;
@@ -57,15 +60,15 @@ const STATUS_VARIANT: Record<
   ReservationStatus,
   "success" | "warning" | "secondary" | "info"
 > = {
-  active: "success",
+  pending: "success",
+  converted: "info",
   cancelled: "warning",
-  collected: "info",
 };
 
 const STATUS_LABEL: Record<ReservationStatus, string> = {
-  active: "Active",
+  pending: "Pending",
+  converted: "Converted",
   cancelled: "Cancelled",
-  collected: "Collected",
 };
 
 export default function ReservationsPage() {
@@ -92,18 +95,18 @@ export default function ReservationsPage() {
       );
   }, [revision]);
 
-  const activeCount = rows.filter((r) => r.status === "active").length;
+  const pendingCount = rows.filter((r) => r.status === "pending").length;
 
   const onStatusChange = (id: string, status: ReservationStatus) => {
     updateReservationStatus(id, status);
     refresh();
     const row = rows.find((r) => r.id === id);
     const label =
-      status === "collected"
-        ? "Marked as Collected"
+      status === "converted"
+        ? "Converted to Order"
         : status === "cancelled"
         ? "Reservation Cancelled"
-        : "Re-activated";
+        : "Updated";
     setToast(`✅ ${label}${row?.customer ? ` · ${row.customer.name}` : ""}`);
     setTimeout(() => setToast(null), 3500);
   };
@@ -135,7 +138,7 @@ export default function ReservationsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="secondary">{rows.length} total</Badge>
-              <Badge variant="success">{activeCount} active</Badge>
+              <Badge variant="success">{pendingCount} pending</Badge>
             </div>
           </div>
         </CardHeader>
@@ -242,38 +245,45 @@ export default function ReservationsPage() {
 
                         {/* Actions */}
                         <td className="whitespace-nowrap px-5 py-4">
-                          <div className="flex justify-end gap-2">
-                            {r.status === "active" ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  onClick={() => onStatusChange(r.id, "collected")}
-                                  className="h-8 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
-                                >
-                                  Mark Collected
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => onStatusChange(r.id, "cancelled")}
-                                  className={cn(
-                                    "h-8 text-xs text-amber-700 hover:bg-amber-50 hover:border-amber-300"
-                                  )}
-                                >
-                                  Cancel
-                                </Button>
-                              </>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => onStatusChange(r.id, "active")}
-                                className="h-8 text-xs"
-                              >
-                                Re-activate
-                              </Button>
-                            )}
-                          </div>
+                           <div className="flex justify-end gap-2">
+                             {r.status === "pending" && (
+                               <>
+                                 <Button
+                                   size="sm"
+                                   onClick={() => {
+                                     const customer = getCustomerById(r.customerId) ?? findOrCreateCustomer({ name: "Walk-in Customer" });
+                                     const frame = getFrameById(r.frameId);
+                                     if (!frame) return;
+                                     const order = createOrder({ customer, frame, orderType: "custom-lens" });
+                                     setConvertedOrderId(r.id, order.id);
+                                     updateReservationStatus(r.id, "converted");
+                                     refresh();
+                                   }}
+                                   className="h-8 bg-blue-600 text-xs text-white hover:bg-blue-700"
+                                 >
+                                   Convert to Order
+                                 </Button>
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   onClick={() => onStatusChange(r.id, "cancelled")}
+                                   className={cn(
+                                     "h-8 text-xs text-amber-700 hover:bg-amber-50 hover:border-amber-300"
+                                   )}
+                                 >
+                                   Cancel
+                                 </Button>
+                               </>
+                             )}
+                             {r.status === "converted" && (
+                               <span className="text-sm font-medium text-blue-600">
+                                 Converted to Order #{getConvertedOrderId(r.id) ?? "…"}
+                               </span>
+                             )}
+                             {r.status === "cancelled" && (
+                               <span className="text-xs text-slate-400">Cancelled</span>
+                             )}
+                           </div>
                         </td>
                       </tr>
                     ))}

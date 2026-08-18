@@ -62,11 +62,11 @@ export default function DashboardPage() {
     const orders = getOrders();
     const totalFrames = frames.length;
     const availableFrames = frames.filter((f) => f.stock > 0).length;
-    const activeReservations = reservations.filter((r) => r.status === "active").length;
+    const activeReservations = reservations.filter((r) => r.status === "pending").length;
     const pendingOrders = orders.filter(
       (o) => o.status === "pending" || o.status === "processing"
     ).length;
-    const readyPickup = orders.filter((o) => o.status === "arrived").length;
+    const readyPickup = orders.filter((o) => o.status === "ready_for_pickup").length;
 
     return [
       {
@@ -139,8 +139,8 @@ export default function DashboardPage() {
         label: customer?.name ?? "Customer",
         sub: frame ? `${frame.brand} ${frame.model}` : "Frame",
         time: r.createdAt,
-        variant: r.status === "active" ? "success" : r.status === "cancelled" ? "warning" : "secondary",
-        statusLabel: r.status === "active" ? "Reserved" : r.status === "cancelled" ? "Cancelled" : "Collected",
+        variant: r.status === "pending" ? "success" : r.status === "cancelled" ? "warning" : "secondary",
+        statusLabel: r.status === "pending" ? "Pending" : r.status === "cancelled" ? "Cancelled" : "Converted",
       });
     }
 
@@ -152,10 +152,10 @@ export default function DashboardPage() {
         label: customer?.name ?? "Customer",
         sub: frame ? `Order ${o.id}` : `Order ${o.id}`,
         time: o.arrivedAt ?? o.createdAt,
-        variant: o.status === "arrived" ? "success" : o.status === "pending" ? "warning" : "info",
+        variant: o.status === "ready_for_pickup" ? "success" : o.status === "pending" ? "warning" : "info",
         statusLabel:
-          o.status === "arrived"
-            ? "Arrived"
+          o.status === "ready_for_pickup"
+            ? "Ready for Pickup"
             : o.status === "pending"
             ? "Pending"
             : o.status === "processing"

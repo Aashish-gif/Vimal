@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
-  getReservations, updateReservationStatus,
+  getReservations, updateReservationStatus, getConvertedOrderId, setConvertedOrderId,
   type Reservation, type ReservationStatus,
 } from "@/lib/data/reservations";
+import { createOrder } from "@/lib/data/orders";
 import { getFrameById, type Frame } from "@/lib/data/frames";
-import { getCustomerById, type Customer } from "@/lib/data/customers";
+import { getCustomerById, findOrCreateCustomer, type Customer } from "@/lib/data/customers";
 
 interface ReservationRow extends Reservation { customer?: Customer; frame?: Frame; }
 
@@ -24,11 +25,15 @@ function initials(name: string) {
   return name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 }
 
-const STATUS_VARIANT: Record<ReservationStatus, "success"|"warning"|"secondary"> = {
-  active: "success", cancelled: "warning", collected: "secondary",
+const STATUS_VARIANT: Record<ReservationStatus, "success" | "warning" | "secondary" | "info"> = {
+  pending: "success",
+  converted: "info",
+  cancelled: "warning",
 };
 const STATUS_LABEL: Record<ReservationStatus, string> = {
-  active: "Active", cancelled: "Cancelled", collected: "Collected",
+  pending: "Pending",
+  converted: "Converted",
+  cancelled: "Cancelled",
 };
 
 import { subscribeToTable } from "@/lib/realtimeSync";
@@ -39,11 +44,13 @@ export default function StaffReservationsPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToTable("reservations", () => {
-      refresh();
-    });
+    const unsubReservations = subscribeToTable("reservations", refresh);
+    const unsubFrames = subscribeToTable("frames", refresh);
+    const unsubCustomers = subscribeToTable("customers", refresh);
     return () => {
-      unsubscribe();
+      unsubReservations();
+      unsubFrames();
+      unsubCustomers();
     };
   }, []);
 
@@ -53,14 +60,25 @@ export default function StaffReservationsPage() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [revision]);
 
-  const activeCount = rows.filter((r) => r.status === "active").length;
+  const pendingCount = rows.filter((r) => r.status === "pending").length;
 
   const onStatusChange = (id: string, status: ReservationStatus) => {
     updateReservationStatus(id, status);
     refresh();
     const row = rows.find((r) => r.id === id);
-    setToast(`✅ ${status === "collected" ? "Marked Collected" : status === "cancelled" ? "Cancelled" : "Re-activated"}${row?.customer ? ` · ${row.customer.name}` : ""}`);
+    setToast(`✅ Reservation Cancelled${row?.customer ? ` · ${row.customer.name}` : ""}`);
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const onConvertToOrder = (r: ReservationRow) => {
+    if (!r.frame) return;
+    const customer = r.customer ?? findOrCreateCustomer({ name: "Walk-in Customer" });
+    const order = createOrder({ customer, frame: r.frame, orderType: "custom-lens" });
+    setConvertedOrderId(r.id, order.id);
+    updateReservationStatus(r.id, "converted");
+    refresh();
+    setToast(`🚀 Converted to Order ${order.id} for ${customer.name}`);
+    setTimeout(() => setToast(null), 3500);
   };
 
   return (
@@ -88,7 +106,7 @@ export default function StaffReservationsPage() {
             </div>
             <div className="flex gap-2">
               <Badge variant="secondary">{rows.length} total</Badge>
-              <Badge variant="success">{activeCount} active</Badge>
+              <Badge variant="success">{pendingCount} pending</Badge>
             </div>
           </div>
         </CardHeader>
@@ -153,13 +171,17 @@ export default function StaffReservationsPage() {
                         </td>
                         <td className="whitespace-nowrap px-5 py-4">
                           <div className="flex justify-end gap-2">
-                            {r.status === "active" ? (
+                            {r.status === "pending" ? (
                               <>
-                                <button onClick={() => onStatusChange(r.id, "collected")} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors">Collect</button>
+                                <button onClick={() => onConvertToOrder(r)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm">Convert to Order</button>
                                 <button onClick={() => onStatusChange(r.id, "cancelled")} className={cn("rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 transition-colors")}>Cancel</button>
                               </>
+                            ) : r.status === "converted" ? (
+                              <span className="text-sm font-medium text-blue-600">
+                                Converted to Order #{getConvertedOrderId(r.id) ?? "…"}
+                              </span>
                             ) : (
-                              <button onClick={() => onStatusChange(r.id, "active")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">Re-activate</button>
+                              <span className="text-xs text-slate-400">Cancelled</span>
                             )}
                           </div>
                         </td>

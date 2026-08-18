@@ -23,10 +23,10 @@ function formatDate(iso: string) {
 }
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; variant: "warning" | "info" | "success" | "secondary"; note?: string }> = {
-  pending:    { label: "Pending",     variant: "warning", note: "Your order has been received." },
-  processing: { label: "Processing",  variant: "info",    note: "Your frames are being prepared." },
-  arrived:    { label: "Ready for Pickup", variant: "success", note: "🎉 Your glasses are ready! Visit Vimal Opticals to collect them." },
-  collected:  { label: "Collected",   variant: "secondary", note: "Order complete. Thank you!" },
+  pending:          { label: "Pending",          variant: "warning", note: "Your order has been received." },
+  processing:       { label: "Processing",        variant: "info",    note: "Your frames are being prepared." },
+  ready_for_pickup: { label: "Ready for Pickup",  variant: "success", note: "🎉 Your glasses are ready! Visit Vimal Opticals to collect them." },
+  collected:        { label: "Collected",          variant: "secondary", note: "Order complete. Thank you!" },
 };
 
 import { subscribeToTable } from "@/lib/realtimeSync";
@@ -81,11 +81,11 @@ export default function CustomerOrdersPage() {
               <div
                 key={o.id}
                 className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all ${
-                  o.status === "arrived" ? "border-emerald-200 ring-2 ring-emerald-100" : "border-slate-200"
+                  o.status === "ready_for_pickup" ? "border-emerald-200 ring-2 ring-emerald-100" : "border-slate-200"
                 }`}
               >
                 {o.frame && (
-                  <div className={`relative h-44 w-full overflow-hidden ${o.status === "arrived" ? "bg-emerald-50" : "bg-gradient-to-br from-slate-50 to-blue-50"}`}>
+                  <div className={`relative h-44 w-full overflow-hidden ${o.status === "ready_for_pickup" ? "bg-emerald-50" : "bg-gradient-to-br from-slate-50 to-blue-50"}`}>
                     <Image
                       src={o.frame.imageUrl}
                       alt={`${o.frame.brand} ${o.frame.model}`}
@@ -93,7 +93,7 @@ export default function CustomerOrdersPage() {
                       className="object-contain p-6"
                       unoptimized
                     />
-                    {o.status === "arrived" && (
+                    {o.status === "ready_for_pickup" && (
                       <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Ready!
@@ -120,7 +120,7 @@ export default function CustomerOrdersPage() {
 
                   {config.note && (
                     <p className={`mt-1 rounded-lg px-3 py-2 text-xs ${
-                      o.status === "arrived" ? "bg-emerald-50 text-emerald-800 font-medium" : "bg-slate-50 text-slate-600"
+                      o.status === "ready_for_pickup" ? "bg-emerald-50 text-emerald-800 font-medium" : "bg-slate-50 text-slate-600"
                     }`}>
                       {config.note}
                     </p>

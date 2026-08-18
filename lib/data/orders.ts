@@ -1,8 +1,10 @@
 import { getCustomerById, type Customer } from "./customers";
-import { type Frame, frames } from "./frames";
+import { type Frame, getFrameById } from "./frames";
+import { isSupabaseConfigured, supabase } from "../supabaseClient";
+import { broadcastChange } from "../realtimeSync";
 
 export type OrderType = "custom-lens" | "ready-pickup" | "repair";
-export type OrderStatus = "pending" | "processing" | "arrived" | "collected";
+export type OrderStatus = "pending" | "processing" | "ready_for_pickup" | "collected";
 
 export interface Order {
   id: string;
@@ -14,51 +16,22 @@ export interface Order {
   arrivedAt: string | null;
 }
 
-let orderCounter = 104;
-let ordersStore: Order[] = [];
-
-function nextOrderId(): string {
-  const id = `VO-${orderCounter}`;
-  orderCounter += 1;
-  return id;
+// Global scope initialization to survive page updates and hot reload
+if (!(global as any).ordersStore) {
+  (global as any).ordersStore = [];
 }
 
-export function seedDemoOrder(): void {
-  if (ordersStore.length > 0) return;
-  const customer = getCustomerById("c-rahul");
-  let frameId = "f-002";
-  const customFrameExists = frames.some((f) => f.id === "f-classic-aviator");
-  if (!customFrameExists) {
-    frames.unshift({
-      id: "f-classic-aviator",
-      brand: "Vimal Opticals",
-      model: "Classic Black Aviator",
-      style: "Aviator",
-      color: "Black",
-      price: 1499,
-      stock: 1,
-      imageUrl:
-        "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=classic%20black%20aviator%20eyeglasses%20frames%20on%20white%20background%20product%20photography&image_size=square_hd",
-    });
-  }
-  frameId = "f-classic-aviator";
-  if (customer) {
-    ordersStore = [
-      {
-        id: "VO-104",
-        customerId: customer.id,
-        frameId,
-        orderType: "custom-lens",
-        status: "processing",
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
-        arrivedAt: null,
-      },
-    ];
-    orderCounter = 105;
-  }
-}
+const getStore = (): Order[] => (global as any).ordersStore;
+const setStore = (val: Order[]) => {
+  (global as any).ordersStore = val;
+};
 
-seedDemoOrder();
+let orderCounter = 1001;
+
+function generateOrderId(): string {
+  const count = orderCounter++;
+  return `VO-${count}`;
+}
 
 export interface CreateOrderInput {
   customer: Customer;
@@ -68,31 +41,53 @@ export interface CreateOrderInput {
 
 export function createOrder(input: CreateOrderInput): Order {
   const order: Order = {
-    id: nextOrderId(),
+    id: generateOrderId(),
     customerId: input.customer.id,
     frameId: input.frame.id,
     orderType: input.orderType ?? "custom-lens",
-    status: "pending",
+    status: "processing",
     createdAt: new Date().toISOString(),
     arrivedAt: null,
   };
-  ordersStore = [order, ...ordersStore];
+
+  setStore([order, ...getStore()]);
+
+  // Sync to other tabs
+  broadcastChange({
+    table: "orders",
+    eventType: "INSERT",
+    newRow: order,
+  });
+
+  // Sync to Supabase in background
+  if (isSupabaseConfigured && supabase) {
+    supabase
+      .from("ifpos_orders")
+      .insert({
+        id: order.id,
+        customer_id: order.customerId,
+        frame_id: order.frameId,
+        order_type: order.orderType,
+        status: order.status,
+        created_at: order.createdAt,
+        arrived_at: order.arrivedAt,
+      })
+      .then();
+  }
+
   return order;
 }
 
 export function getOrders(): Order[] {
-  seedDemoOrder();
-  return [...ordersStore];
+  return [...getStore()];
 }
 
 export function getOrderById(id: string): Order | undefined {
-  seedDemoOrder();
-  return ordersStore.find((o) => o.id === id);
+  return getStore().find((o) => o.id === id);
 }
 
 export function getOrdersByCustomer(customerId: string): Order[] {
-  seedDemoOrder();
-  return ordersStore.filter((o) => o.customerId === customerId);
+  return getStore().filter((o) => o.customerId === customerId);
 }
 
 export interface UpdateOrderResult {
@@ -104,13 +99,57 @@ export function updateOrderStatus(
   id: string,
   status: OrderStatus
 ): UpdateOrderResult | null {
-  seedDemoOrder();
-  const order = ordersStore.find((o) => o.id === id);
+  const order = getStore().find((o) => o.id === id);
   if (!order) return null;
-  const newlyArrived = order.status !== "arrived" && status === "arrived";
+
+  const newlyArrived = order.status !== "ready_for_pickup" && status === "ready_for_pickup";
   order.status = status;
-  if (status === "arrived" && !order.arrivedAt) {
+  if (status === "ready_for_pickup" && !order.arrivedAt) {
     order.arrivedAt = new Date().toISOString();
   }
+
+  setStore([...getStore()]);
+
+  // Sync to other tabs
+  broadcastChange({
+    table: "orders",
+    eventType: "UPDATE",
+    newRow: order,
+  });
+
+  // Sync to Supabase in background
+  if (isSupabaseConfigured && supabase) {
+    supabase
+      .from("ifpos_orders")
+      .update({
+        status: order.status,
+        arrived_at: order.arrivedAt,
+      })
+      .eq("id", id)
+      .then();
+  }
+
   return { order, newlyArrived };
 }
+
+// Fetch initial orders from Supabase on startup if online
+if (isSupabaseConfigured && supabase) {
+  supabase
+    .from("ifpos_orders")
+    .select("*")
+    .then(({ data }) => {
+      if (data && data.length > 0) {
+        const mapped: Order[] = data.map((d) => ({
+          id: d.id,
+          customerId: d.customer_id,
+          frameId: d.frame_id,
+          orderType: d.order_type as OrderType,
+          status: d.status as OrderStatus,
+          createdAt: d.created_at,
+          arrivedAt: d.arrived_at,
+        }));
+        setStore(mapped);
+      }
+    });
+}
+

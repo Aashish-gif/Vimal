@@ -125,7 +125,7 @@ export default function InventoryPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   const activeReserved = useMemo(() => {
-    const res = getReservations().filter((r) => r.status === "active");
+    const res = getReservations().filter((r) => r.status === "pending");
     const ids = new Set(res.map((r) => r.frameId));
     return new Set([...reservedIds, ...ids]);
   }, [reservedIds]);
